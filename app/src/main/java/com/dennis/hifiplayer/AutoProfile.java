@@ -38,15 +38,16 @@ public final class AutoProfile {
         String number=g.replace("(","").replace(")","").trim();
         if(number.matches("[0-9]{1,3}")){
             switch(Integer.parseInt(number)){
-                case 0:case 57:return "jazz"; // Blues / Southern Rock is not inferred as Rock
-                case 2:case 63:return "country";
-                case 13:return "pop";
-                case 14:case 42:return "rnb";
-                case 15:case 7:return "rap";
-                case 17:case 1:case 40:case 41:case 43:return "rock";
-                case 20:case 3:case 18:case 31:case 36:case 52:case 53:case 54:case 55:return "edm";
-                case 32:case 33:case 34:return "classical";
-                case 80:case 83:case 85:case 88:return "fifties";
+                case 0:case 8:case 29:case 30:case 74:case 85:case 96:return "jazz";
+                case 2:case 89:return "country";
+                case 13:case 28:case 46:case 53:case 60:case 62:case 98:return "pop";
+                case 5:case 14:case 42:return "rnb";
+                case 7:case 15:case 27:case 59:case 61:return "rap";
+                case 1:case 6:case 9:case 17:case 20:case 22:case 40:case 43:case 47:case 56:case 79:case 81:case 91:case 92:case 93:case 94:case 95:return "rock";
+                case 3:case 4:case 18:case 19:case 25:case 31:case 35:case 51:case 52:case 54:case 63:case 68:return "edm";
+                case 24:case 26:case 32:case 33:case 44:case 45:return "classical";
+                case 11:case 76:case 78:case 83:return "fifties";
+                case 80:case 82:case 88:return "acoustic";
                 default:return "neutral";
             }
         }
