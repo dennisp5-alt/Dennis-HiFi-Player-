@@ -43,14 +43,15 @@ public final class MainActivity extends Activity {
     private ListenableFuture<MediaController> controllerFuture;
     private MediaController controller;
     private final List<Song> allSongs=new ArrayList<>(), visibleSongs=new ArrayList<>();
-    private String folderFilter="",search="",tab="LIBRARY";
-    private LinearLayout outer,toolbar,mini,folderRow,libraryView,soundView,nowView,modeButtons,levels;
+    private String folderFilter="",genreFilter="",search="",tab="LIBRARY";
+    private LinearLayout outer,toolbar,mini,folderRow,genreRow,libraryView,soundView,nowView,modeButtons,levels;
     private FrameLayout page;
     private TextView libCount,folderDescription,miniTitle,miniArtist,playMini,nowTitle,nowArtist,
-            playBig,progressText,remainingText,autoDescription,boosterText,repeatLabel,shuffleLabel;
+            playBig,progressText,remainingText,autoDescription,boosterText,repeatLabel,shuffleLabel,
+            nowGenre,presetPicker,folderGenreButton;
     private ImageView coverArt,miniArt;
     private SeekBar progress,booster;
-    private final TextView[] modeChips=new TextView[3];
+    private final TextView[] modeChips=new TextView[4];
     private final SeekBar[] eqSliders=new SeekBar[5];
     private final TextView[] eqNumbers=new TextView[5];
     private SongAdapter adapter;
@@ -177,6 +178,16 @@ public final class MainActivity extends Activity {
         HorizontalScrollView folderScroll=new HorizontalScrollView(this);folderScroll.setHorizontalScrollBarEnabled(false);
         folderRow=new LinearLayout(this);folderRow.setGravity(Gravity.CENTER_VERTICAL);
         folderScroll.addView(folderRow);libraryView.addView(folderScroll,space(-1,dp(55),0,dp(4)));
+        folderGenreButton=txt("ASSIGN GENRE TO SELECTED FOLDER  ›",11,TEAL,true);
+        folderGenreButton.setPadding(dp(8),dp(6),dp(8),dp(11));
+        folderGenreButton.setOnClickListener(v->{if(!folderFilter.isEmpty())editFolderGenre(folderFilter);});
+        libraryView.addView(folderGenreButton);
+        TextView genreHeader=txt("GENRES  ·  FILTER YOUR MUSIC",10,GOLD,true);
+        libraryView.addView(genreHeader);
+        HorizontalScrollView genreScroll=new HorizontalScrollView(this);
+        genreScroll.setHorizontalScrollBarEnabled(false);
+        genreRow=new LinearLayout(this);genreRow.setGravity(Gravity.CENTER_VERTICAL);
+        genreScroll.addView(genreRow);libraryView.addView(genreScroll,space(-1,dp(52),0,dp(5)));
         adapter=new SongAdapter(this::playSong);
         RecyclerView list=new RecyclerView(this);list.setLayoutManager(new LinearLayoutManager(this));
         list.setAdapter(adapter);list.setClipToPadding(false);list.setPadding(0,0,0,dp(8));
@@ -185,12 +196,13 @@ public final class MainActivity extends Activity {
     }
     private void refreshFolders(){
         if(folderRow==null)return;
-        folderRow.removeAllViews();folderChip("All folders",folderFilter.isEmpty(),()->{folderFilter="";applyFilter();refreshFolders();},null);
+        folderRow.removeAllViews();folderChip("All folders",folderFilter.isEmpty(),()->{folderFilter="";genreFilter="";refreshGenres();applyFilter();refreshFolders();},null);
         for(String folder:prefs.folders()){
             String label=folderLabel(folder);
-            folderChip(label,folder.equals(folderFilter),()->{folderFilter=folder;applyFilter();refreshFolders();},()->confirmRemove(folder,label));
+            folderChip(label,folder.equals(folderFilter),()->{folderFilter=folder;genreFilter="";refreshGenres();applyFilter();refreshFolders();},()->confirmRemove(folder,label));
         }
         folderDescription.setText("FOLDERS  ·  TAP TO FILTER  ·  HOLD TO REMOVE");
+        if(folderGenreButton!=null)folderGenreButton.setVisibility(folderFilter.isEmpty()?View.GONE:View.VISIBLE);
     }
     private void folderChip(String name,boolean active,Runnable select,Runnable remove){
         TextView chip=txt(name,12,active?INK:MUTED,active);
@@ -214,8 +226,55 @@ public final class MainActivity extends Activity {
                 .setPositiveButton("Remove",(d,w)->{
                     prefs.removeFolder(uri);if(uri.equals(folderFilter))folderFilter="";
                     try{getContentResolver().releasePersistableUriPermission(Uri.parse(uri),Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}
-                    refreshFolders();loadLibrary();
+                    refreshFolders();refreshGenres();loadLibrary();
                 }).show();
+    }
+    private void refreshGenres(){
+        if(genreRow==null)return;
+        genreRow.removeAllViews();
+        genreChip("All genres","",genreFilter.isEmpty());
+        Set<String> present=new LinkedHashSet<>();
+        for(Song song:allSongs){
+            if(!folderFilter.isEmpty() && !folderFilter.equals(song.rootUri))continue;
+            present.add(AutoProfile.classifyId(prefs.effectiveGenre(song)));
+        }
+        for(String id:AutoProfile.IDS){
+            if(present.contains(id))genreChip(AutoProfile.preset(id).name,id,id.equals(genreFilter));
+        }
+        if(present.contains("neutral"))genreChip("Uncategorised","neutral","neutral".equals(genreFilter));
+    }
+    private void genreChip(String label,String id,boolean active){
+        TextView chip=txt(label,11,active?INK:MUTED,active);
+        chip.setPadding(dp(14),dp(9),dp(14),dp(9));chip.setBackground(panelDrawable(active?TEAL:SURFACE,12));
+        LinearLayout.LayoutParams lp=space(-2,-2,0,0);lp.rightMargin=dp(7);genreRow.addView(chip,lp);
+        chip.setOnClickListener(v->{genreFilter=id;refreshGenres();applyFilter();});
+    }
+    private interface GenreSelected {void select(String id);}
+    private void showGenreDialog(String selected,boolean presetOnly,GenreSelected action){
+        String[] labels=new String[AutoProfile.NAMES.length+(presetOnly?0:1)];
+        int start=presetOnly?0:1;
+        if(!presetOnly)labels[0]="Use embedded genre / clear assignment";
+        System.arraycopy(AutoProfile.NAMES,0,labels,start,AutoProfile.NAMES.length);
+        int active=presetOnly?0:-1;
+        for(int i=0;i<AutoProfile.IDS.length;i++)if(AutoProfile.IDS[i].equals(selected))active=i+start;
+        new AlertDialog.Builder(this).setTitle(presetOnly?"Choose listening EQ preset":"Assign music genre")
+            .setSingleChoiceItems(labels,active,(dialog,which)->{
+                dialog.dismiss();action.select(which<start?"":AutoProfile.IDS[which-start]);
+            }).setNegativeButton("Cancel",null).show();
+    }
+    private void editCurrentTrackGenre(){
+        Song song=currentSong();
+        if(song==null){toast("Select a song first");return;}
+        showGenreDialog(prefs.trackGenre(song.uri.toString()),false,id->{
+            prefs.trackGenre(song.uri.toString(),id);
+            refreshGenres();applyFilter();notifyFx();updatePlaybackUi();
+        });
+    }
+    private void editFolderGenre(String folder){
+        showGenreDialog(prefs.folderGenre(folder),false,id->{
+            prefs.folderGenre(folder,id);
+            refreshGenres();applyFilter();notifyFx();updatePlaybackUi();
+        });
     }
     private void pickFolder(){
         Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
@@ -235,7 +294,7 @@ public final class MainActivity extends Activity {
         if(libCount!=null)libCount.setText("Scanning selected music folders…");
         scanner.scan(prefs.folders(),(songs,unavailable,truncated)->runOnUiThread(()->{
             allSongs.clear();allSongs.addAll(songs);
-            applyFilter();
+            refreshGenres();applyFilter();
             if(!unavailable.isEmpty())toast(unavailable.size()+" folder(s) unavailable. Re-select them if moved.");
             if(truncated)toast("12,000-track scan limit reached; narrow your folders.");
         }));
@@ -244,7 +303,8 @@ public final class MainActivity extends Activity {
         visibleSongs.clear();
         for(Song s:allSongs){
             if(!folderFilter.isEmpty() && !folderFilter.equals(s.rootUri))continue;
-            if(!search.isEmpty() && !(s.title+" "+s.artist+" "+s.album).toLowerCase(Locale.ROOT).contains(search))continue;
+            if(!genreFilter.isEmpty() && !genreFilter.equals(AutoProfile.classifyId(prefs.effectiveGenre(s))))continue;
+            if(!search.isEmpty() && !(s.title+" "+s.artist+" "+s.album+" "+prefs.effectiveGenre(s)).toLowerCase(Locale.ROOT).contains(search))continue;
             visibleSongs.add(s);
         }
         String id=currentId();
@@ -257,7 +317,7 @@ public final class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},36);
         List<MediaItem> items=new ArrayList<>();int start=0;
         for(int i=0;i<visibleSongs.size();i++){
-            Song s=visibleSongs.get(i);items.add(s.asMediaItem());if(s.uri.equals(track.uri))start=i;
+            Song s=visibleSongs.get(i);items.add(s.asMediaItem(prefs.effectiveGenre(s)));if(s.uri.equals(track.uri))start=i;
         }
         if(items.isEmpty())return;
         controller.setMediaItems(items,start,0L);controller.prepare();controller.play();
@@ -282,7 +342,11 @@ public final class MainActivity extends Activity {
         nowTitle=txt("Choose a track",23,WHITE,true);nowTitle.setGravity(Gravity.CENTER);nowTitle.setMaxLines(2);
         body.addView(nowTitle);
         nowArtist=txt("Select a music folder to begin",14,MUTED,false);nowArtist.setGravity(Gravity.CENTER);
-        body.addView(nowArtist,space(-1,-2,0,dp(22)));
+        body.addView(nowArtist,space(-1,-2,0,dp(7)));
+        nowGenre=txt("GENRE  ·  TAP TO SET",12,TEAL,true);
+        nowGenre.setGravity(Gravity.CENTER);nowGenre.setPadding(dp(8),dp(7),dp(8),dp(16));
+        nowGenre.setOnClickListener(v->editCurrentTrackGenre());
+        body.addView(nowGenre,space(-1,-2,0,dp(7)));
         progress=new SeekBar(this);progress.setMax(1000);progress.setProgressTintList(android.content.res.ColorStateList.valueOf(TEAL));
         progress.setThumbTintList(android.content.res.ColorStateList.valueOf(TEAL));
         body.addView(progress,new LinearLayout.LayoutParams(-1,dp(39)));
@@ -336,8 +400,8 @@ public final class MainActivity extends Activity {
         body.addView(txt("EQUALIZER",11,GOLD,true));
         modeButtons=new LinearLayout(this);modeButtons.setGravity(Gravity.CENTER);
         modeButtons.setPadding(dp(4),dp(4),dp(4),dp(4));modeButtons.setBackground(panelDrawable(SURFACE,14));
-        for(int i=0;i<3;i++){
-            final String mode=new String[]{"off","auto","manual"}[i];
+        for(int i=0;i<4;i++){
+            final String mode=new String[]{"off","auto","preset","manual"}[i];
             TextView chip=txt(mode.toUpperCase(Locale.ROOT),12,MUTED,true);chip.setGravity(Gravity.CENTER);
             chip.setPadding(0,dp(15),0,dp(15));modeButtons.addView(chip,new LinearLayout.LayoutParams(0,-2,1));
             chip.setOnClickListener(v->{prefs.mode(mode);refreshSoundUi();notifyFx();});
@@ -346,7 +410,14 @@ public final class MainActivity extends Activity {
         body.addView(modeButtons,space(-1,-2,0,dp(16)));
         autoDescription=txt("",13,MUTED,false);autoDescription.setPadding(dp(15),dp(15),dp(15),dp(15));
         autoDescription.setBackground(panelDrawable(PANEL,14));
-        body.addView(autoDescription,space(-1,-2,0,dp(20)));
+        body.addView(autoDescription,space(-1,-2,0,dp(13)));
+        presetPicker=txt("CHOOSE GENRE PRESET  ›",13,TEAL,true);
+        presetPicker.setPadding(dp(17),dp(14),dp(17),dp(14));
+        presetPicker.setBackground(panelDrawable(PANEL,13));
+        presetPicker.setOnClickListener(v->showGenreDialog(prefs.preset(),true,(id)->{
+            prefs.preset(id);prefs.mode("preset");refreshSoundUi();notifyFx();
+        }));
+        body.addView(presetPicker,space(-1,-2,0,dp(16)));
         levels=new LinearLayout(this);levels.setOrientation(LinearLayout.VERTICAL);
         String[] labels={"BASS   80 Hz","LOW MID   250 Hz","MID   1 kHz","PRESENCE   4 kHz","AIR   12 kHz"};
         for(int i=0;i<5;i++){
@@ -375,7 +446,7 @@ public final class MainActivity extends Activity {
         body.addView(reset);
         body.addView(txt("CLEAN VOLUME LIFT",11,GOLD,true));
         boosterText=txt("",14,WHITE,true);body.addView(boosterText,space(-1,-2,0,dp(9)));
-        booster=new SeekBar(this);booster.setMax(6);booster.setProgress(prefs.boost());
+        booster=new SeekBar(this);booster.setMax(12);booster.setProgress(prefs.boost());
         booster.setProgressTintList(android.content.res.ColorStateList.valueOf(TEAL));
         booster.setThumbTintList(android.content.res.ColorStateList.valueOf(GOLD));
         body.addView(booster);
@@ -386,7 +457,7 @@ public final class MainActivity extends Activity {
             public void onStartTrackingTouch(SeekBar s){}
             public void onStopTrackingTouch(SeekBar s){}
         });
-        TextView caution=txt("Boost is limited to +3 dB and uses Android loudness processing. It may compress loud peaks; turn it off for the most faithful sound. Avoid high listening volumes.",12,MUTED,false);
+        TextView caution=txt("Boost reaches +6 dB in 0.5 dB steps using Android loudness processing. Loud recordings can compress or distort at higher settings; this is not a true-peak limiter. For maximum fidelity, keep boost off. Protect your hearing.",12,MUTED,false);
         caution.setPadding(0,dp(9),0,dp(25));body.addView(caution);
         refreshSoundUi();
     }
@@ -395,27 +466,37 @@ public final class MainActivity extends Activity {
     }
     private void refreshSoundUi(){
         String mode=prefs.mode();
-        String[] modes={"off","auto","manual"};
-        for(int i=0;i<3;i++){
+        String[] modes={"off","auto","preset","manual"};
+        for(int i=0;i<4;i++){
             boolean active=mode.equals(modes[i]);
             modeChips[i].setBackground(active?panelDrawable(TEAL,12):null);
             modeChips[i].setTextColor(active?INK:MUTED);
         }
         boolean manual=mode.equals("manual");
+        AutoProfile preset=AutoProfile.preset(prefs.preset());
+        Song song=currentSong();
+        AutoProfile detected=AutoProfile.classify(song==null?"":prefs.effectiveGenre(song));
         for(int i=0;i<5;i++){
-            eqSliders[i].setEnabled(manual);eqSliders[i].setAlpha(manual?1f:.35f);
-            eqSliders[i].setProgress(prefs.gain(i)+6);
-            int n=prefs.gain(i);eqNumbers[i].setText((n>0?"+":"")+n+" dB");
+            eqSliders[i].setEnabled(manual);eqSliders[i].setAlpha(manual?1f:.45f);
+            float gain=manual?prefs.gain(i):mode.equals("preset")?preset.gains[i]:mode.equals("auto")?detected.gains[i]:0;
+            eqSliders[i].setProgress(Math.max(0,Math.min(12,Math.round(gain)+6)));
+            eqNumbers[i].setText(String.format(Locale.ROOT,"%+.1f dB",gain));
         }
+        presetPicker.setVisibility(mode.equals("preset")?View.VISIBLE:View.GONE);
+        presetPicker.setText("CHOOSE GENRE  ·  "+preset.name+"  ›");
         if(mode.equals("auto")){
-            AutoProfile p=AutoProfile.forTrack(controller!=null && controller.getCurrentMediaItem()!=null?
-                    controller.getCurrentMediaItem().mediaMetadata:null);
-            autoDescription.setText("AUTO PROFILE  ·  "+p.name+"\nSubtle EQ chosen from recognised genre tags. Untagged tracks stay neutral.");
-        } else if(mode.equals("manual"))autoDescription.setText("MANUAL PROFILE\nYour five-band EQ is applied to every track, independently of genre tags.");
-        else autoDescription.setText("DIRECT LISTENING\nEQ processing is disabled. Your music is played without tonal adjustments from this app.");
+            autoDescription.setText("AUTO PROFILE  ·  "+detected.name+"\nReads embedded genre tags or your track/folder assignments. Does not analyse the audio signal. Unknown genres stay neutral.");
+        } else if(mode.equals("preset"))autoDescription.setText("FIXED GENRE PRESET  ·  "+preset.name+"\nThis EQ stays active for every song until you change it.");
+        else if(mode.equals("manual"))autoDescription.setText("MANUAL EQ\nYour five-band EQ is applied to every song.");
+        else autoDescription.setText("DIRECT LISTENING\nEQ is disabled; no tonal adjustment from this app.");
         booster.setProgress(prefs.boost());updateBoosterLabel();
     }
-    private void notifyFx(){sendBroadcast(new Intent(PlaybackService.FX_REFRESH).setPackage(getPackageName()));}
+    private void notifyFx(){
+        Intent refresh=new Intent(PlaybackService.FX_REFRESH).setPackage(getPackageName());
+        Song song=currentSong();
+        if(song!=null){refresh.putExtra("media_id",song.uri.toString());refresh.putExtra("genre",prefs.effectiveGenre(song));}
+        sendBroadcast(refresh);
+    }
     private void togglePlayback(){if(controller==null)return;
         if(controller.isPlaying())controller.pause();else{
             if(controller.getMediaItemCount()>0){controller.prepare();controller.play();}
@@ -439,6 +520,7 @@ public final class MainActivity extends Activity {
         nowTitle.setText(title==null?"Untitled":title);
         nowArtist.setText(artist==null?"Unknown artist":artist);
         miniTitle.setText(nowTitle.getText());miniArtist.setText(nowArtist.getText());
+        if(nowGenre!=null)nowGenre.setText("GENRE  ·  "+(song==null?"UNKNOWN":AutoProfile.classify(prefs.effectiveGenre(song)).name.toUpperCase(Locale.ROOT))+"  ·  TAP TO EDIT");
         boolean playing=controller.isPlaying();playBig.setText(playing?"Ⅱ":"▶");playMini.setText(playing?"Ⅱ":"▶");
         shuffleLabel.setTextColor(controller.getShuffleModeEnabled()?TEAL:MUTED);
         repeatLabel.setText(controller.getRepeatMode()==Player.REPEAT_MODE_ONE?"↻¹":"↻");

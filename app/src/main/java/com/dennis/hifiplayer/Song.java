@@ -22,11 +22,12 @@ public final class Song {
         this.durationMs = Math.max(0, durationMs);
     }
     private static boolean blank(String s) { return s == null || s.trim().isEmpty(); }
-    public MediaItem asMediaItem() {
+    public MediaItem asMediaItem() { return asMediaItem(genre); }
+    public MediaItem asMediaItem(String resolvedGenre) {
         return new MediaItem.Builder().setUri(uri).setMediaId(uri.toString())
                 .setMediaMetadata(new MediaMetadata.Builder()
                         .setTitle(title).setArtist(artist).setAlbumTitle(album)
-                        .setGenre(genre).build())
+                        .setGenre(resolvedGenre).build())
                 .build();
     }
 }
