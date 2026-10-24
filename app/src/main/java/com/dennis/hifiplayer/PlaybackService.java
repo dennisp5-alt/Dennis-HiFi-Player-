@@ -19,7 +19,11 @@ public class PlaybackService extends MediaSessionService {
     private SoundEngine engine;
     private final BroadcastReceiver receiver=new BroadcastReceiver() {
         @Override public void onReceive(android.content.Context c, Intent intent) {
-            if(engine!=null) engine.apply();
+            if(engine!=null){
+                String id=intent.getStringExtra("media_id");
+                if(id!=null && intent.hasExtra("genre"))engine.overrideCurrentGenre(id,intent.getStringExtra("genre"));
+                else engine.apply();
+            }
         }
     };
     @Override public void onCreate() {
@@ -33,11 +37,11 @@ public class PlaybackService extends MediaSessionService {
         player.addListener(new Player.Listener() {
             @Override public void onAudioSessionIdChanged(int id) { engine.attach(id); }
             @Override public void onMediaItemTransition(androidx.media3.common.MediaItem item,int reason) {
-                engine.updateTrack(item==null?null:item.mediaMetadata);
+                engine.updateTrack(item);
             }
             @Override public void onMediaMetadataChanged(androidx.media3.common.MediaMetadata metadata) {
                 // Use richer tags decoded by the player if the scanner could not read them.
-                engine.updateTrack(metadata);
+                engine.updateDecodedMetadata(metadata);
             }
         });
         mediaSession=new MediaSession.Builder(this,player).build();

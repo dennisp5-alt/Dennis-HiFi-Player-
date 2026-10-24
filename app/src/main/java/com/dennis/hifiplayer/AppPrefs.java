@@ -13,8 +13,29 @@ public final class AppPrefs {
     public void mode(String mode) { prefs.edit().putString("eq_mode",mode).apply(); }
     public int gain(int i) { return prefs.getInt("eq_"+i,0); }
     public void gain(int i,int db) { prefs.edit().putInt("eq_"+i,db).apply(); }
-    public int boost() { return prefs.getInt("booster_half_db", 0); }
-    public void boost(int halfDb) { prefs.edit().putInt("booster_half_db",Math.max(0,Math.min(6,halfDb))).apply(); }
+    public int boost() { return Math.min(12,Math.max(0,prefs.getInt("booster_half_db", 0))); }
+    public void boost(int halfDb) { prefs.edit().putInt("booster_half_db",Math.max(0,Math.min(12,halfDb))).apply(); }
+    public String preset(){return prefs.getString("eq_preset","country");}
+    public void preset(String id){prefs.edit().putString("eq_preset",id).apply();}
+    public String trackGenre(String mediaId){return prefs.getString("genre_track_"+mediaId,"");}
+    public void trackGenre(String mediaId,String id){
+        SharedPreferences.Editor e=prefs.edit();
+        if(id==null||id.isEmpty())e.remove("genre_track_"+mediaId);
+        else e.putString("genre_track_"+mediaId,id);
+        e.apply();
+    }
+    public String folderGenre(String rootUri){return prefs.getString("genre_folder_"+rootUri,"");}
+    public void folderGenre(String rootUri,String id){
+        SharedPreferences.Editor e=prefs.edit();
+        if(id==null||id.isEmpty())e.remove("genre_folder_"+rootUri);
+        else e.putString("genre_folder_"+rootUri,id);
+        e.apply();
+    }
+    public String effectiveGenre(Song song){
+        String override=trackGenre(song.uri.toString());if(!override.isEmpty())return override;
+        override=folderGenre(song.rootUri);if(!override.isEmpty())return override;
+        return song.genre;
+    }
     public List<String> folders() {
         List<String> result = new ArrayList<>();
         try {

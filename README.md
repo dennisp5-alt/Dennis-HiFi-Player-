@@ -39,3 +39,12 @@ By default `mode=off`, `boost=0` and the app adds no tonal EQ or gain effects. A
 - Verify pause/resume, background lock-screen media controls and headset disconnects.
 - Compare EQ OFF output and listening against reference music player; measure for clipping at each boost setting and evaluate device/vendor EQ availability.
 - Exercise corrupted files, track change during rapid folder scans, and mixed sample rates.
+
+
+## v0.1.1 music genres and EQ presets
+
+- New **PRESET** EQ mode for Country, Rock, EDM/Eurodance, Pop, Rap/Hip-hop, R&B/Soul, 50s/Oldies, Christmas/Holiday, Jazz/Blues, Acoustic/Folk, and Classical/Natural.
+- **AUTO** mode uses recognised embedded genre tags or user-assigned per-song or per-folder genres. The music is **not** analysed by AI; missing genres cannot be inferred reliably.
+- Library genre filter chips show which preset category each song maps to. In Now Playing, tap the genre text to assign a track. In Library, choose a folder then tap **Assign genre to selected folder**. These settings never modify source audio files.
+- Booster now ranges from off to +6 dB in 0.5 dB increments. Android LoudnessEnhancer may compress or distort higher peaks; this is not a guaranteed clip-free or true-peak-limited boost.
+- The previous EQ/manual settings and folder library remain preserved through normal app upgrades.
